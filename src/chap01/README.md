@@ -176,3 +176,92 @@ public class Theater {
 우리가 집중해야 할 것은 협력이 이루어지는 객체 세계를 만드는 것이기 때문에, 완전히 의존성을 가지고 있지 않은 객체를 만들 필요는 없다. 다만, 애플리케이션의 기능을 구축하는 데 있어 필요한 최소한의 의존성만 가지고 있도록 해야 변경에 취약하지 않게 설계할 수 있을 것이다.
 
 의존성이 너무 높을 경우를 가리켜 결합도가 높다고 말한다.
+
+### 티켓 판매 어플리케이션 - 1차 개선
+문제점은 Theater에서 직접 접근한다는 것이다. 때문에 자율성을 높이기 위해 다음과 같이 한다.
+#### 1. TicketSeller의 자율성을 높인다.
+TicketSeller의 코드에 다음 메서드를 추가한다.
+```java
+public void sellTo(Audience audience) {
+    if (audience.getBag().hasInvitation()) {
+        Ticket ticket = ticketOffice.getTicket();
+    } else {
+        Ticket ticket = ticketOffice.getTicket();
+        audience.getBag().minusAmount(ticket.getFee());
+        ticketOffice.plusAmount(ticket.getFee());
+        audience.getBag().setTicket(ticket);
+    }
+}
+```
+또한 기존에 TicketSeller가 가지고 있던 `getTicketOffice` 메서드를 삭제한다.
+
+이제 Theater에서 `enter` 메서드는 다음과 같이 변한다.
+```java
+public void enter(Audience audience) {
+    ticketSeller.sellTo(audience);
+}
+```
+
+* Theater에서는 TicketSeller가 가지고 있는 TicketOffice에 대해 알 수 있는 방법이 없다. getTicketOffice 메서드를 삭제했기 때문이다.
+* TicketSeller는 확실히 이전보다 더 자율적으로 변화되었다고 할 수 있다.
+* 이에 따라 캡슐화가 진행되었다고 할 수 있으며, 캡슐화의 목적은 변경하기 쉬운 객체를 만드는 것이다. 캡슐화는 객체와 객체 사이의 결합도를 낮출 수 있다. (= 객체 사이의 불필요한 의존 관계를 없앨 수 있다.)
+* Theater는 오직 TicketSeller의 인터페이스에만 의존하게 되었으며, TicketSeller가 TicketOffice 인스턴스를 포함하고 있다는 사실은 구현의 영역에 속한다.
+
+#### 2. Audience의 자율성을 높인다.
+TicketSeller의 sellTo 메서드는 아직 Audience의 자율성을 보장하지 못하는 문제가 남아 있다. (그대로 이동시킨 것이기 때문) 
+
+따라서 Audience에 다음 메서드를 추가한다.
+
+```java
+public Long buy(Ticket ticket) {
+    if (bag.hasInvitation()) {
+        bag.setTicket(ticket);
+        return 0L;
+    } else {
+        bag.setTicket(ticket);
+        bag.minusAmount(ticket.getFee());
+        return ticket.getFee();
+    }
+}
+```
+또한, 기존에 Audience가 가지고 있던 `getBag` 메서드를 삭제한다.
+
+TicketSeller의 `sellTo` 메서드는 다음과 같이 변한다.
+```java
+public void sellTo(Audience audience) {
+    ticketOffice.plusAmount(audience.buy(ticketOffice.getTicket()));
+}
+```
+* Audience는 자신의 가방을 보여주도록 하지 않는다.
+* 초대장을 받았다면 티켓으로 교환되는 것이기 때문에 0을 더하며, 그렇지 않을 경우에는 티켓을 구입하는 것이기에 티켓 값 만큼 매표소에 더하게 된다.
+* 코드를 수정한 결과, TicketSeller와 Audience 간의 결합도를 낮출 수 있게 되었으며, TicketSeller가 Audience의 인터페이스만 의존하게 되었다.
+
+### 캡슐화와 응집도
+변경된 Theater는 Audience와 TicketSeller가 어떤 방식으로 주어진 책임을 수행하는지에 대해 구체적으로 알지 못한다. 즉, 예시로 관람객이 가방을 들고 있는지 없는지에 대해서 알 필요가 없게 된 것이다. 따라서 변경을 하더라도 쉽게 대처할 수 있게 되었으며, 이처럼 밀접하게 연관된 작업만을 수행하고 연관성 없는 작업은 다른 객체에게 위임하는 경우를 응집도가 높다고 말한다. 객체지향의 원리에 따라 응집도를 높이기 위해서는 자신이 가지고 있는 데이터를 최대한 감추어 외부의 간섭을 배제 (객체 스스로 자신의 데이터를 책임지기)하고, 메시지를 통해서만 협력할 수 있도록 해야 한다.
+
+## 절차지향 vs 객체지향
+### 절차지향
+가장 처음에 설계했던 방식이 바로 절차지향적으로 코드를 작성한 방식이다.
+
+Theater의 enter 메서드에서는 Audience, TicketSeller, Bag, TicketOffice를 직, 간접적으로 알고 있으며, 이후 “관람객의 입장” 이라는 문제를 이 메서드에서 전체적으로 다 수행하였다.
+
+이때 Theater의 enter 메서드를 프로세스 (process), Audience, TicketSeller, Bag, TicketOffice를 데이터 (data)라 하며, 프로세스와 데이터를 별도의 모듈에 위치시키는 방식이 절차지향의 특징이다. (프로세스는 Theater에 있는 반면, 데이터들은 전부 각자의 클래스로 흩어져 있다.)
+
+이러한 절차지향은 위에서 다루었듯 우리의 직관에 위배되며, 데이터의 변경으로 인한 영향을 지역적으로 고립시키기 어렵다. 변경에 용이하게 만들려면 한 번에 하나의 클래스만 변경하도록 해야 하는데, 절차지향은 프로세스가 필요한 모든 데이터를 의존하기 때문이다.
+
+### 객체지향
+우리가 개선한 방식이 바로 객체지향적으로 코드를 작성한 방식이다.
+
+Theater는 TicketSeller만 의존하게 되었으며, Audience는 자신의 가방을 외부 객체에게 드러낼 필요가 없게 되었다. (TicketSeller가 Audience를 의존하게 되었지만 이는 적절한 트레이드 오프의 결과이다.)
+
+객체지향의 핵심은 데이터를 가지고 있는 곳에서 프로세스가 이루어지는, 즉 데이터와 프로세스가 동일한 모듈 내부에 위치하도록 프로그래밍하는 것이다. 따라서, 캡슐화를 통해 객체 간의 결합도를 낮추어 변경에 용이하게 만든다.
+
+## 책임의 이동
+책임 관점에서 정의해보면 절차지향과 객체지향을 다시 비교해볼 수 있다.
+
+절차지향적 관점에서는 Theater가 모든 책임을 갖추고 있었다. 반면 객체지향에서는 책임이 적절하게 나뉘었다.
+
+### 절차지향과 객체지향의 구분법
+코드에서 데이터와 데이터를 사용하는 프로세스가 별도의 객체에 위치하고 있다면 절차적 프로그래밍 방식을 따르고 있을 확률이 높으며, 그 반대의 경우에는 객체지향적 프로그래밍 방식을 따르고 있을 확률이 높다.
+
+객체지향의 핵심은 적절한 객체에 적절한 책임을 할당하는 것임을 잊지 말자. 책임 중심적으로 생각해야 한다. 그렇게 하면 우리의 직관에 따르듯이 코드를 설계하게 되어 더 이해하기 쉬워진다.
