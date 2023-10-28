@@ -265,3 +265,86 @@ Theater는 TicketSeller만 의존하게 되었으며, Audience는 자신의 가�
 코드에서 데이터와 데이터를 사용하는 프로세스가 별도의 객체에 위치하고 있다면 절차적 프로그래밍 방식을 따르고 있을 확률이 높으며, 그 반대의 경우에는 객체지향적 프로그래밍 방식을 따르고 있을 확률이 높다.
 
 객체지향의 핵심은 적절한 객체에 적절한 책임을 할당하는 것임을 잊지 말자. 책임 중심적으로 생각해야 한다. 그렇게 하면 우리의 직관에 따르듯이 코드를 설계하게 되어 더 이해하기 쉬워진다.
+
+## 추가 개선점
+### 1. Bag 클래스를 자율적으로 만들기
+개선된 Audience 클래스를 보면, 더 개선할 수 있는 여지가 있다.
+```java
+public Long buy(Ticket ticket) {
+    if (bag.hasInvitation()) {
+        bag.setTicket(ticket);
+        return 0L;
+    } else {
+        bag.setTicket(ticket);
+        bag.minusAmount(ticket.getFee());
+        return ticket.getFee();
+    }
+}
+```
+* Bag이 너무 수동적인 입장이라는 생각이 들 것이다.
+* 따라서 Bag 또한 자율적인 객체로 만들어보면 아래와 같다.
+
+Bag에 hold 메서드를 만든다.
+```java
+public Long hold(Ticket ticket) {
+    if (hasInvitation()) {
+        setTicket(ticket);
+    } else {
+        setTicket(ticket);
+        minusAmount(ticket.getFee());
+        return ticket.getFee();
+    }
+    // hasInvitation, setTicket, minusAmount의 접근자를 전부 private로 바꿀 수 있게 되었다.
+}
+```
+
+Bag은 이제 자신이 가지고 있는 데이터 (Invitation, Ticket)를 이용하는 프로세스를 가지고 있도록 되었다.
+
+이에 따라 Audience의 buy 메서드는 다음과 같이 변경된다.
+
+```java
+public Long buy(Ticket ticket) {
+    return bag.hold(ticket);
+}
+```
+### 2. TicketOffice 클래스를 자율적으로 만들기
+기존의 TicketSeller가 가지고 있는 sellTo 메서드를 본다.
+```java
+public void sellTo(Audience audience) {
+    ticketOffice.plusAmount(audience.buy(ticketOffice.getTicket()));
+}
+```
+* TicketOffice가 가지고 있는 티켓을 강제로 꺼내서 Audience에게 할당해주고 있다.
+* 따라서 다음과 같이 변경한다.
+
+TicketOffice에 다음 메서드를 추가한다.
+```java
+public void sellTicketTo(Audience audience) {
+    plusAmount(audience.buy(getTicket()));
+}
+```
+자신이 가지고 있는 데이터 (Ticket)를 사용하는 프로세스 (sellTicketTo)의 위치로 같이 두게 되었다.
+
+TicketSeller는 다음과 같이 변경된다.
+
+```java
+public void sellTo(Audience audience) {
+    ticketOffice.sellTicketTo(audience);
+}
+```
+### 아쉬운 점
+그런데 이 변경은 완벽하지 못하다고 할 수 있다. 이전의 관계에서 sellTicketTo 메서드를 작성하기 전에는, TicketOffice가 Audience에 대해 아예 모르고 있었다. 그러나 지금은 의존관계가 생겨버렸다.
+
+Audience에 대한 결합도와, TicketOffice에게 자율성을 부여해주는 것 중 어떤 것을 고려해야 할 지는 개발자들의 선택이며, 따라서 트레이드 오프에 대한 고민을 해야 한다.
+
+## 의인화
+객체지향적으로 바꾼 결과, 우리의 직관에 따라 수행하여 더 이해하기 쉬워졌다고 했다. 그러나 Bag, TicketOffice 등은 실세계에서는 자율적인 존재가 아니다. 가방에서 돈을 꺼내는 것은 가방이 아니라 관람객이기 때문이다. 이처럼 현실에서는 수동적인 존재라고 하더라도 객체지향의 세계에 들어오면 모든 것이 능동적이고 자율적인 존재가 되며, 이를 의인화라고 한다.
+
+## 설계의 중요성
+> 좋은 설계는 오늘 완성해야 하는 기능을 구현하는 코드를 짜야 하는 동시에 내일 쉽게 변경할 수 있는 코드를 짜는 것이다. 즉, 오늘 요구하는 기능을 온전히 수행하면서 내일의 변경을 매끄럽게 수용할 수 있어야 한다.
+
+### 변경 = 버그 발생 가능
+변경되지 않는 코드는 없다. 실제 서비스로 나가면 요구사항은 변경되기 마련이다. 또 이 변경의 과정에서 필연적으로 버그가 발생할 수 있다. 유연하지 못한 설계는 버그 발생률을 높이며, 이는 프로그래머에게 코드 수정 의지를 꺾어뜨리는 요소가 된다.
+
+### 객체지향의 중요한 점
+거듭 말했지만, 객체지향을 제대로 이해하기 위해서는 데이터와 프로세스를 동일한 공간에 모아놓는 것을 넘어서서 협력하는 객체 사이의 의존성을 적절히 관리하는 것이 포함된다.
